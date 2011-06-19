@@ -1,0 +1,12 @@
+{application, gen_dbi,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { gen_dbi_app, []}},
+  {env, []}
+ ]}.
