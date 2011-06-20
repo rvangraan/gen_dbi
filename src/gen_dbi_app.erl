@@ -10,7 +10,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    osw_dbi_sup:start_link().
+    gen_dbi_sup:start_link().
 
 stop(_State) ->
     ok.
