@@ -14,16 +14,27 @@
 -include_lib("gen_dbi/include/gen_dbi.hrl").
 %%--------------------------------------------------------------------------------------------------
 
+%% TODO: add opts
 connect(Host, Database, Username, Password, _DBDOpts) ->
-%%  {ok, P} = pgsql_connection:start_link(),
-  Ret = pgsql:connect(Host, Username, Password, [{database, Database}]),
-  Ret.
+  try
+   case pgsql:connect(Host, Username, Password, [{database, Database}]) of
+    {ok, Pid}                                -> {ok, Pid};
+    {error, {{badmatch,{error,nxdomain}},_}} -> {error, invalid_hostname};
+    {error, invalid_password}                -> {error, invalid_password};
+    {error, <<"3D000">>}                     -> {error, invalid_database};
+    
+    Error -> error_logger:error_msg("unknown error: ~p", [Error])
+  end
+  catch
+    throw:E ->
+      error_logger:error_msg("unknown exception: ~p",[E])
+  end.
 
 %%--------------------------------------------------------------------------------------------------
 
 disconnect(C) ->
-  Ret = pgsql:close(C#gen_dbi.handle),
-  Ret.
+  ok = pgsql:close(C#gen_dbi.handle),
+  ok.
 
 %%--------------------------------------------------------------------------------------------------
 

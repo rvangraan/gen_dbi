@@ -4,9 +4,11 @@
 -include_lib("gen_dbi/include/gen_dbi.hrl").
 %%--------------------------------------------------------------------------------------------------
 -export([
+  drivers/0,
   trans/1,
   trans/2,
   connect/0,
+  connect/6,
   disconnect/1,
   execute/1,
   execute/2,
@@ -22,6 +24,10 @@
 %% API
 %%--------------------------------------------------------------------------------------------------
 
+drivers() -> [pg].
+
+%%--------------------------------------------------------------------------------------------------
+
 connect() ->
   Params = application:get_all_env(gen_dbi),
 
@@ -34,13 +40,20 @@ connect() ->
 
   connect(Driver, Host, Database, Username, Password, DriverOpts).
 
+%%--------------------------------------------------------------------------------------------------
+
 connect(Driver, Host, Database, Username, Password, DriverOpts) ->
   Module = get_driver_module(Driver),
 
   %% TODO common errors/exceptions?
-  case Module:connect(Host, Database, Username, Password, DriverOpts) of
-    {ok, C}        -> {ok, #gen_dbi{driver = Module, handle = C}};
-    {error, Error} -> {error, Error}
+  case is_driver_supported(Driver) of
+    true  -> 
+        case Module:connect(Host, Database, Username, Password, DriverOpts) of
+          {ok, C}        -> {ok, #gen_dbi{driver = Module, handle = C}};
+          {error, Error} -> {error, Error}
+        end;
+
+    false -> {error, invalid_driver}
   end.
 
 %%--------------------------------------------------------------------------------------------------
@@ -49,7 +62,8 @@ disconnect(C) when is_record(C, gen_dbi) ->
   Driver = get_driver_module(C),
   
   %% TODO common errors/exceptions?
-  Driver:disconnect(C).
+  ok = Driver:disconnect(C),
+  ok.
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -121,5 +135,10 @@ get_driver_module() ->
     {ok, Driver} -> list_to_atom("gen_dbd_" ++ atom_to_list(Driver));
     _            -> throw(undefined_database_driver)
   end.
+
+%%--------------------------------------------------------------------------------------------------
+
+is_driver_supported(Driver) ->
+  lists:any(fun(E) -> E =:= Driver end, drivers()).
 
 %%--------------------------------------------------------------------------------------------------
