@@ -28,13 +28,13 @@ connect(Host, Database, Username, Password, _DBDOpts) ->
     {error, <<"3D000">>}                     -> {error, invalid_database};
     
     {error, Error} -> 
-      error_logger:error_msg("unknown gen_dbd_pg:connect error: ~p", [Error]),
+      error_logger:error_msg("unknown gen_dbd_pg:connect error: ~p\n", [Error]),
       {error, Error}
   end
   catch
     C:E ->
       error_logger:error_msg(
-        "unknown gen_dbd_pg:connect exception \nclass: ~p \nexception: ~p",[C,E]),
+        "unknown gen_dbd_pg:connect exception \nclass: ~p \nexception: ~p\n",[C,E]),
         {error, unable_to_connect}
   end.
 

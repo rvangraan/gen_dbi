@@ -219,6 +219,95 @@ execute_insert_test() ->
 
 %%--------------------------------------------------------------------------------------------------
 
+trx_ok_test() ->
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
+
+  F1 = 
+    fun(_Handle, "BEGIN", _Args) -> {ok,1,2};
+       (_Handle, "COMMIT", _Args) -> {ok,1,2};
+       (_Handle, "ROLLBACK", _Args) -> {ok,1,2};
+       (_Handle, "SELECT * FROM something", _Args) -> {ok, [], [{},{}]}
+  end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  Ret = gen_dbi:trx(C, fun(C1) -> gen_dbi:execute(C1, "SELECT * FROM something",[]) end),
+  ?assertEqual(Ret, {ok,[],[{},{}]} ),
+  
+  meck:unload(pgsql).
+
+
+%%--------------------------------------------------------------------------------------------------
+
+trx_error_test() ->
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
+
+  F1 = 
+    fun(_Handle, "BEGIN", _Args) -> {ok,1,2};
+       (_Handle, "COMMIT", _Args) -> {ok,1,2};
+       (_Handle, "ROLLBACK", _Args) -> {ok,1,2};
+       (_Handle, "SELECT * FROM something", _Args) -> throw(43)
+  end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  Ret = gen_dbi:trx(C, fun(C1) -> gen_dbi:execute(C1, "SELECT * FROM something",[]) end),
+  ?assertEqual(Ret, {error, 43}),
+  
+  meck:unload(pgsql).  
+
+%%--------------------------------------------------------------------------------------------------
+
+trx_exception_test() ->
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
+
+  F1 = 
+    fun(_Handle, "BEGIN", _Args) -> {ok,1,2};
+       (_Handle, "COMMIT", _Args) -> {ok,1,2};
+       (_Handle, "ROLLBACK", _Args) -> {ok,1,2}
+  end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  Ret = gen_dbi:trx(C, fun(C1) -> erlang:error(43) end),
+  ?assertEqual(Ret, {error, system_malfunction}),
+  
+  meck:unload(pgsql).  
+
+%%--------------------------------------------------------------------------------------------------
+
+trx_ok_auto_connect_test() ->
+  F1 = 
+    fun(_Handle, "BEGIN", _Args) -> {ok,1,2};
+       (_Handle, "COMMIT", _Args) -> {ok,1,2};
+       (_Handle, "ROLLBACK", _Args) -> {ok,1,2};
+       (_Handle, "SELECT * FROM something", _Args) -> {ok, [], [{},{}]}
+  end,
+
+  F2 = fun(_Host, _User, _Passwd, _Opts) ->
+    {ok, pid}
+  end,
+
+  F3 = fun(_Pid) ->
+    ok
+  end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+  meck:expect(pgsql, connect, F2),
+  meck:expect(pgsql, close, F3),
+
+  Ret = gen_dbi:trx(fun(C) -> gen_dbi:execute(C, "SELECT * FROM something",[]) end),
+  ?assertEqual(Ret, {ok,[],[{},{}]} ),
+
+  meck:unload(pgsql).  
+  
+%%--------------------------------------------------------------------------------------------------
+
+
 start_stop_test() ->
   ok = application:start(gen_dbi),
   ok = application:stop(gen_dbi),

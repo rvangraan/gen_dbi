@@ -93,10 +93,11 @@ trx(C, Fun) when is_record(C, gen_dbi_dbh), is_function(Fun) ->
   catch
     throw:E ->
       {error, E};
-    C:E ->
-      error_logger:error_message(
-        "unknown gen_dbi:trx exception, \nclass: ~p, \nexception: ~p\n", [C,E]),
-      {error, system_malfunction}       
+
+    error:E ->
+      error_logger:error_msg(
+        "unknown gen_dbi:trx error exception, \nclass: ~p, \nexception: ~p\n", [C,E]),
+      {error, system_malfunction}     
   after
     ok = trx_rollback(C)
   end.
