@@ -21,8 +21,7 @@
   fetch_lists/2,
   fetch_lists/3,
   fetch_tuples/2,
-  fetch_tuples/3,
-  test/0
+  fetch_tuples/3
 ]).
 %%--------------------------------------------------------------------------------------------------
 %% API
@@ -39,8 +38,8 @@ connect() ->
   Driver     = proplists:get_value(driver,   Params, pg),
   Host       = proplists:get_value(host,     Params, "127.0.0.1"),
   Database   = proplists:get_value(database, Params, "openswitch"),
-  Username   = proplists:get_value(username, Params),
-  Password   = proplists:get_value(password, Params),
+  Username   = proplists:get_value(username, Params, "postgres"),
+  Password   = proplists:get_value(password, Params, "postgres"),
   DriverOpts = proplists:get_value(options,  Params, []),
 
   connect(Driver, Host, Database, Username, Password, DriverOpts).
@@ -185,17 +184,6 @@ get_driver_module() ->
 
 is_driver_supported(Driver) ->
   lists:any(fun(E) -> E =:= Driver end, drivers()).
-
-%%--------------------------------------------------------------------------------------------------
-
-test() ->
-  F = fun(C) ->
-    gen_dbi:execute(C, "INSERT INTO currency (1,'BLA', 'BLABLABLA')"),
-    throw(lalala)
-  end,
-
-  gen_dbi:trx(F),
-  ok.
 
 %%--------------------------------------------------------------------------------------------------
 

@@ -25,6 +25,53 @@ connect_ok_test() ->
 
 %%--------------------------------------------------------------------------------------------------
 
+connect_error_test() ->
+  F1 = fun(_Host, _User, _Passwd, _Opts) ->
+    {error, 42}
+  end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, connect, F1),
+
+  ?assertEqual({error, 42} , gen_dbi:connect(pg, "host", "db", "user", "passwd", [])),
+
+  meck:unload(pgsql).
+
+%%--------------------------------------------------------------------------------------------------
+
+connect_throw_test() ->
+  F1 = fun(_Host, _User, _Passwd, _Opts) ->
+    throw(42)
+  end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, connect, F1),
+
+  ?assertEqual({error, unable_to_connect} , gen_dbi:connect(pg, "host", "db", "user", "passwd", [])),
+
+  meck:unload(pgsql).
+
+%%--------------------------------------------------------------------------------------------------
+
+connect_default_params_test() ->
+  F1 = fun(Host, Username, Password, DriverOpts) ->
+    ?assertEqual(Host,       "127.0.0.1"),
+    ?assertEqual(Username,   "postgres"),
+    ?assertEqual(Password,   "postgres"),
+    ?assertEqual(DriverOpts, [{database, "openswitch"}]),
+    {ok, pid}
+  end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, connect, F1),
+
+  {ok, C} = gen_dbi:connect(),
+  ?assertEqual(C#gen_dbi_dbh.handle, pid),
+
+  meck:unload(pgsql).  
+
+%%--------------------------------------------------------------------------------------------------
+
 connect_fail_host_test() ->
   F1 = fun(_Host, _User, _Passwd, _Opts) ->
     {error,{{badmatch,{error,nxdomain}},[]}}
@@ -33,7 +80,7 @@ connect_fail_host_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  {error, invalid_hostname} = gen_dbi:connect(pg, "host", "db", "user", "passwd", []),
+  ?assertEqual({error, invalid_hostname} , gen_dbi:connect(pg, "host", "db", "user", "passwd", [])),
 
   meck:unload(pgsql).
 
@@ -52,7 +99,7 @@ connect_fail_username_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  {error, invalid_password} = gen_dbi:connect(pg, "host", "db", "xxx", "passwd", []),
+  ?assertEqual({error, invalid_password} , gen_dbi:connect(pg, "host", "db", "xxx", "passwd", [])),
 
   meck:unload(pgsql).
 
@@ -66,7 +113,7 @@ connect_fail_password_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  {error, invalid_password} = gen_dbi:connect(pg, "host", "db", "user", "xxx", []),
+  ?assertEqual({error, invalid_password} , gen_dbi:connect(pg, "host", "db", "user", "xxx", [])),
 
   meck:unload(pgsql).
 
@@ -80,7 +127,7 @@ connect_fail_database_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  {error, invalid_database} = gen_dbi:connect(pg, "host", "xxx", "user", "passwd", []),
+  ?assertEqual({error, invalid_database} , gen_dbi:connect(pg, "host", "xxx", "user", "passwd", [])),
 
   meck:unload(pgsql).
 
@@ -97,7 +144,7 @@ disconnect_ok_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, close, F1),
 
-  ok = gen_dbi:disconnect(C),
+  ?assertEqual(ok , gen_dbi:disconnect(C)),
 
   meck:unload(pgsql).
 
@@ -119,7 +166,7 @@ execute_select_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, equery, F1),
 
-  {ok, Columns, Rows} = gen_dbi:execute(C, "SELECT * FROM something", []),
+  ?assertEqual({ok, Columns, Rows} , gen_dbi:execute(C, "SELECT * FROM something", [])),
 
   meck:unload(pgsql).
 
@@ -140,7 +187,7 @@ execute_update_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, equery, F1),
 
-  {ok, Count} = gen_dbi:execute(C, "UPDATE something SET something = something", []),
+  ?assertEqual({ok, Count} , gen_dbi:execute(C, "UPDATE something SET something = something", [])),
 
   meck:unload(pgsql).
 
@@ -163,8 +210,19 @@ execute_insert_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, equery, F1),
 
-  {ok, Count, Columns, Rows} = gen_dbi:execute(C, "INSERT INTO something VALUES (something)", []),
+  ?assertEqual(
+    {ok, Count, Columns, Rows},
+    gen_dbi:execute(C, "INSERT INTO something VALUES (something)", [])
+  ),
 
   meck:unload(pgsql).
+
+%%--------------------------------------------------------------------------------------------------
+
+start_stop_test() ->
+  ok = application:start(gen_dbi),
+  ok = application:stop(gen_dbi),
+  ok = application:start(gen_dbi),
+  ok.
 
 %%--------------------------------------------------------------------------------------------------
