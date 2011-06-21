@@ -19,7 +19,7 @@
 %%--------------------------------------------------------------------------------------------------
 
 %% TODO: merge/validate/convert? opts
-connect(Host, Database, Username, Password, DBDOpts) ->
+connect(Host, Database, Username, Password, _DBDOpts) ->
   try
    case pgsql:connect(Host, Username, Password, [{database, Database}]) of
     {ok, Pid}                                -> {ok, Pid};
@@ -27,12 +27,15 @@ connect(Host, Database, Username, Password, DBDOpts) ->
     {error, invalid_password}                -> {error, invalid_password};
     {error, <<"3D000">>}                     -> {error, invalid_database};
     
-    Error -> error_logger:error_msg("unknown gen_dbd_pg:connect error: ~p", [Error])
+    Error -> 
+      error_logger:error_msg("unknown gen_dbd_pg:connect error: ~p", [Error]),
+      {error, Error}
   end
   catch
     C:E ->
       error_logger:error_msg(
-        "unknown gen_dbd_pg:connect exception, class: \n~p, exception: \n~p",[C,E])
+        "unknown gen_dbd_pg:connect exception, class: \n~p, exception: \n~p",[C,E]),
+        {error, unable_to_connect}
   end.
 
 %%--------------------------------------------------------------------------------------------------
@@ -51,7 +54,7 @@ fetch_proplists(C, SQL, Params) ->
 
     {error, _Error}=R   -> R;
 
-    _                   -> throw(invalid_select)
+    _                   -> throw(not_a_select)
   end.
       
 loop_fetch_proplists(_Columns, [], Acc) ->
@@ -71,7 +74,7 @@ fetch_lists(C, SQL, Params) ->
 
     {error, _Error}=R   -> R;
 
-    _                   -> throw(invalid_select)
+    _                   -> throw(not_a_select)
   end.
 
 %%--------------------------------------------------------------------------------------------------
@@ -84,7 +87,7 @@ fetch_tuples(C, SQL, Params) ->
 
     {error, _Error}=R   -> R;
 
-    _                   -> throw(invalid_select)
+    _                   -> throw(not_a_select)
   end.
 
 %%--------------------------------------------------------------------------------------------------
@@ -95,15 +98,15 @@ fetch_records(_C, _SQL, _Params, _RecordName) ->
 %%--------------------------------------------------------------------------------------------------
 
 trx_begin(C) ->
-  x = pgsql:execute(C#gen_dbi_dbh.handle, "BEGIN", []),
+  {ok,_,_} = execute(C, "BEGIN", []),
   ok.
 
 trx_rollback(C) ->
-  x = pgsql:execute(C#gen_dbi_dbh.handle, "ROLL BACK",[]),
+  {ok,_,_} = execute(C, "ROLLBACK",[]),
   ok.
 
 trx_commit(C) ->
-  x = pgsql:execute(C#gen_dbi_dbh.handle, "COMMIT", []),
+  {ok,_,_} = execute(C, "COMMIT", []),
   ok.
 
 %%--------------------------------------------------------------------------------------------------

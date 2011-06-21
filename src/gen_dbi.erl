@@ -32,6 +32,7 @@ drivers() -> [pg].
 
 %%--------------------------------------------------------------------------------------------------
 
+%% TODO: undefines
 connect() ->
   Params = application:get_all_env(gen_dbi),
 
@@ -80,28 +81,29 @@ trx_commit(C) ->
 
 trx_rollback(C) ->
   Driver = get_driver_module(C),
-  Driver:trx_rollback().
+  Driver:trx_rollback(C).
 
 %%--------------------------------------------------------------------------------------------------
 
 trx(C, Fun) when is_record(C, gen_dbi_dbh), is_function(Fun) ->
   try
-    %% ok = trx_begin(C),
+    ok = trx_begin(C),
     Ret = Fun(C),
-    %% ok = trx_commit(C),
+    ok = trx_commit(C),
     Ret
   catch
     throw:E ->
-      %% trx_rollback(C),
       {error, E};
     C:E ->
       error_logger:error_message(
-        "unknown gen_dbi:trx exception, \nclass: ~p, \nexception: ~p\n", [C,E])
+        "unknown gen_dbi:trx exception, \nclass: ~p, \nexception: ~p\n", [C,E]),
+      {error, system_malfunction}       
+  after
+    ok = trx_rollback(C)
   end.
 
 trx(Fun) when is_function(Fun) ->
   %% TODO: pools
-
   {ok, C} = connect(),
   Ret = trx(C, Fun),
   ok = disconnect(C),
@@ -121,19 +123,20 @@ prepare(C, SQL) when is_record(C, gen_dbi_dbh),  is_list(SQL) ->
 
 %%--------------------------------------------------------------------------------------------------
 
+execute(C, Args) when is_record(C, gen_dbi_sth), is_list(Args) ->
+  Driver = get_driver_module(C),
+  Driver:execute(C, Args);
+
 execute(C, SQL) when is_record(C, gen_dbi_dbh), is_list(SQL) ->
   execute(C, SQL, []).
 
 execute(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args) ->
   Driver = get_driver_module(C),
-  Driver:execute(C, SQL, Args);
-
-execute(C, SQL, Args) when is_record(C, gen_dbi_sth), is_list(SQL), is_list(Args) ->
-  Driver = get_driver_module(C),
   Driver:execute(C, SQL, Args).
 
 %%--------------------------------------------------------------------------------------------------
 
+%% TODO: has to work the same with execute and prepare/execute
 fetch_proplists(C, SQL) when is_record(C, gen_dbi_dbh), is_list(SQL) ->
   fetch_proplists(C, SQL, []).
 
@@ -162,6 +165,9 @@ fetch_tuples(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list
 %%--------------------------------------------------------------------------------------------------
 %% Internal
 %%--------------------------------------------------------------------------------------------------
+
+get_driver_module(C) when is_record(C, gen_dbi_sth) ->
+  C#gen_dbi_sth.driver;
 
 get_driver_module(C) when is_record(C, gen_dbi_dbh) ->
   C#gen_dbi_dbh.driver;
@@ -196,7 +202,7 @@ test() ->
 %% TODO: select_*
 %% TODO: prepare, bind, execute
 %% TODO: errors
-%% TODO: begin/commit/roll_back
+%% DONE: begin/commit/roll_back
 %% TODO: integrate with TM
 %% TODO: raiseError
 %% TODO: datetime/conversion?

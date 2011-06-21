@@ -102,3 +102,69 @@ disconnect_ok_test() ->
   meck:unload(pgsql).
 
 %%--------------------------------------------------------------------------------------------------
+
+execute_select_test() ->
+  Columns = [],
+  Rows = [{},{}],
+
+  F1 = fun(Handle, SQL, Args) ->
+    ?assertEqual(Handle, pid),
+    ?assertEqual(SQL, "SELECT * FROM something"),
+    ?assertEqual(Args, []),
+    {ok, Columns, Rows}
+  end,
+
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  {ok, Columns, Rows} = gen_dbi:execute(C, "SELECT * FROM something", []),
+
+  meck:unload(pgsql).
+
+%%--------------------------------------------------------------------------------------------------
+
+execute_update_test() ->
+  Count = 42,
+
+  F1 = fun(Handle, SQL, Args) ->
+    ?assertEqual(Handle, pid),
+    ?assertEqual(SQL, "UPDATE something SET something = something"),
+    ?assertEqual(Args, []),
+    {ok, Count}
+  end,
+
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  {ok, Count} = gen_dbi:execute(C, "UPDATE something SET something = something", []),
+
+  meck:unload(pgsql).
+
+%%--------------------------------------------------------------------------------------------------
+
+execute_insert_test() ->
+  Columns = [],
+  Rows = [{},{}],
+  Count = 42,
+
+  F1 = fun(Handle, SQL, Args) ->
+    ?assertEqual(Handle, pid),
+    ?assertEqual(SQL, "INSERT INTO something VALUES (something)"),
+    ?assertEqual(Args, []),
+    {ok, Count, Columns, Rows}
+  end,
+
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  {ok, Count, Columns, Rows} = gen_dbi:execute(C, "INSERT INTO something VALUES (something)", []),
+
+  meck:unload(pgsql).
+
+%%--------------------------------------------------------------------------------------------------
