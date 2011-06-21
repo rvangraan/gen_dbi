@@ -1,7 +1,7 @@
 {application, gen_dbi,
  [
-  {description, ""},
-  {vsn, "1"},
+  {description, "Generic Database Interface"},
+  {vsn, "1.0.0"},
   {registered, []},
   {applications, [
                   kernel,

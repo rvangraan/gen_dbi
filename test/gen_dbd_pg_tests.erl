@@ -18,8 +18,8 @@ connect_ok_test() ->
   meck:expect(pgsql, connect, F1),
 
   {ok, C} = gen_dbi:connect(pg, "host", "db", "user", "passwd", []),
-  ?assertEqual(C#gen_dbi.driver, gen_dbd_pg),
-  ?assertEqual(C#gen_dbi.handle, pid),
+  ?assertEqual(C#gen_dbi_dbh.driver, gen_dbd_pg),
+  ?assertEqual(C#gen_dbi_dbh.handle, pid),
 
   meck:unload(pgsql).
 
@@ -92,7 +92,7 @@ disconnect_ok_test() ->
     ok
   end,
 
-  C = #gen_dbi{driver = gen_dbd_pg, handle = pid},
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
 
   meck:new(pgsql),
   meck:expect(pgsql, close, F1),
@@ -101,4 +101,4 @@ disconnect_ok_test() ->
 
   meck:unload(pgsql).
 
-%%--------------------------------------------------------------------------------------------------  
+%%--------------------------------------------------------------------------------------------------

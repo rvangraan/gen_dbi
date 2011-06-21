@@ -5,12 +5,15 @@
 %%--------------------------------------------------------------------------------------------------
 -export([
   drivers/0,
-  trans/1,
-  trans/2,
+  trx_begin/1,
+  trx_commit/1,
+  trx_rollback/1,
+  trx/1,
+  trx/2,
   connect/0,
   connect/6,
   disconnect/1,
-  execute/1,
+  prepare/2,
   execute/2,
   execute/3,
   fetch_proplists/2,
@@ -18,7 +21,8 @@
   fetch_lists/2,
   fetch_lists/3,
   fetch_tuples/2,
-  fetch_tuples/3
+  fetch_tuples/3,
+  test/0
 ]).
 %%--------------------------------------------------------------------------------------------------
 %% API
@@ -43,22 +47,21 @@ connect() ->
 %%--------------------------------------------------------------------------------------------------
 
 connect(Driver, Host, Database, Username, Password, DriverOpts) ->
-  Module = get_driver_module(Driver),
-
   %% TODO common errors/exceptions?
   case is_driver_supported(Driver) of
-    true  -> 
-        case Module:connect(Host, Database, Username, Password, DriverOpts) of
-          {ok, C}        -> {ok, #gen_dbi{driver = Module, handle = C}};
-          {error, Error} -> {error, Error}
-        end;
+    true  ->
+      Module = get_driver_module(Driver), 
+      case Module:connect(Host, Database, Username, Password, DriverOpts) of
+        {ok, C}        -> {ok, #gen_dbi_dbh{driver = Module, handle = C}};
+        {error, Error} -> {error, Error}
+      end;
 
     false -> {error, invalid_driver}
   end.
 
 %%--------------------------------------------------------------------------------------------------
 
-disconnect(C) when is_record(C, gen_dbi) ->
+disconnect(C) when is_record(C, gen_dbi_dbh) ->
   Driver = get_driver_module(C),
   
   %% TODO common errors/exceptions?
@@ -67,56 +70,92 @@ disconnect(C) when is_record(C, gen_dbi) ->
 
 %%--------------------------------------------------------------------------------------------------
 
-trans(C, Fun) when is_record(C, gen_dbi), is_function(Fun) ->
-  Fun(C).
+trx_begin(C) ->
+  Driver = get_driver_module(C),
+  Driver:trx_begin(C).
 
-trans(Fun) when is_function(Fun) ->
+trx_commit(C) ->
+  Driver = get_driver_module(C),
+  Driver:trx_commit(C).
+
+trx_rollback(C) ->
+  Driver = get_driver_module(C),
+  Driver:trx_rollback().
+
+%%--------------------------------------------------------------------------------------------------
+
+trx(C, Fun) when is_record(C, gen_dbi_dbh), is_function(Fun) ->
+  try
+    %% ok = trx_begin(C),
+    Ret = Fun(C),
+    %% ok = trx_commit(C),
+    Ret
+  catch
+    throw:E ->
+      %% trx_rollback(C),
+      {error, E};
+    C:E ->
+      error_logger:error_message(
+        "unknown gen_dbi:trx exception, \nclass: ~p, \nexception: ~p\n", [C,E])
+  end.
+
+trx(Fun) when is_function(Fun) ->
+  %% TODO: pools
+
   {ok, C} = connect(),
-  Ret = Fun(C),
+  Ret = trx(C, Fun),
   ok = disconnect(C),
   Ret.  
 
 %%--------------------------------------------------------------------------------------------------
 
-execute(SQL) when is_list(SQL) -> 
-  execute(SQL, []).
-  
-execute(SQL, Args) when is_list(SQL), is_list(Args) ->
-  trans(fun(C) -> execute(C, SQL, []) end);
+prepare(C, SQL) when is_record(C, gen_dbi_dbh),  is_list(SQL) ->
+  Driver = get_driver_module(C),
+
+  %% TODO: errors
+  {ok, Statement} = Driver:prepare(C, SQL),
+  Sth = #gen_dbi_sth{ driver = #gen_dbi_dbh.driver, 
+                      handle = #gen_dbi_dbh.handle, 
+                      statement = Statement},
+  {ok, Sth}.
 
 %%--------------------------------------------------------------------------------------------------
 
-execute(C, SQL) when is_record(C, gen_dbi), is_list(SQL) ->
+execute(C, SQL) when is_record(C, gen_dbi_dbh), is_list(SQL) ->
   execute(C, SQL, []).
 
-execute(C, SQL, Args) when is_record(C, gen_dbi), is_list(SQL), is_list(Args) ->
+execute(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args) ->
+  Driver = get_driver_module(C),
+  Driver:execute(C, SQL, Args);
+
+execute(C, SQL, Args) when is_record(C, gen_dbi_sth), is_list(SQL), is_list(Args) ->
   Driver = get_driver_module(C),
   Driver:execute(C, SQL, Args).
-  
+
 %%--------------------------------------------------------------------------------------------------
 
-fetch_proplists(C, SQL) when is_record(C, gen_dbi), is_list(SQL) ->
+fetch_proplists(C, SQL) when is_record(C, gen_dbi_dbh), is_list(SQL) ->
   fetch_proplists(C, SQL, []).
 
-fetch_proplists(C, SQL, Args) when is_record(C, gen_dbi), is_list(SQL), is_list(Args) ->
+fetch_proplists(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args) ->
   Driver = get_driver_module(),
   Driver:fetch_proplists(C, SQL, Args).
 
 %%--------------------------------------------------------------------------------------------------
 
-fetch_lists(C, SQL) when is_record(C, gen_dbi), is_list(SQL) ->
+fetch_lists(C, SQL) when is_record(C, gen_dbi_dbh), is_list(SQL) ->
   fetch_lists(C, SQL, []).
 
-fetch_lists(C, SQL, Args) when is_record(C, gen_dbi), is_list(SQL), is_list(Args) ->
+fetch_lists(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args) ->
   Driver = get_driver_module(),
   Driver:fetch_lists(C, SQL, Args).
 
 %%--------------------------------------------------------------------------------------------------
 
-fetch_tuples(C, SQL) when is_record(C, gen_dbi), is_list(SQL) ->
+fetch_tuples(C, SQL) when is_record(C, gen_dbi_dbh), is_list(SQL) ->
   fetch_tuples(C, SQL, []).
 
-fetch_tuples(C, SQL, Args) when is_record(C, gen_dbi), is_list(SQL), is_list(Args) ->
+fetch_tuples(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args) ->
   Driver = get_driver_module(),
   Driver:fetch_tuples(C, SQL, Args).
 
@@ -124,8 +163,8 @@ fetch_tuples(C, SQL, Args) when is_record(C, gen_dbi), is_list(SQL), is_list(Arg
 %% Internal
 %%--------------------------------------------------------------------------------------------------
 
-get_driver_module(C) when is_record(C, gen_dbi) ->
-  C#gen_dbi.driver;
+get_driver_module(C) when is_record(C, gen_dbi_dbh) ->
+  C#gen_dbi_dbh.driver;
 
 get_driver_module(Driver) when is_atom(Driver) ->
   list_to_atom("gen_dbd_" ++ atom_to_list(Driver)).
@@ -142,3 +181,25 @@ is_driver_supported(Driver) ->
   lists:any(fun(E) -> E =:= Driver end, drivers()).
 
 %%--------------------------------------------------------------------------------------------------
+
+test() ->
+  F = fun(C) ->
+    gen_dbi:execute(C, "INSERT INTO currency (1,'BLA', 'BLABLABLA')"),
+    throw(lalala)
+  end,
+
+  gen_dbi:trx(F),
+  ok.
+
+%%--------------------------------------------------------------------------------------------------
+
+%% TODO: select_*
+%% TODO: prepare, bind, execute
+%% TODO: errors
+%% TODO: begin/commit/roll_back
+%% TODO: integrate with TM
+%% TODO: raiseError
+%% TODO: datetime/conversion?
+%% TODO: amount conversion
+%% TODO: default timeouts
+%% TODO: test statements

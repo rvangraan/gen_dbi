@@ -4,6 +4,10 @@
 -export([
   connect/5,
   disconnect/1,
+  trx_begin/1,
+  trx_commit/1,
+  trx_rollback/1,
+  execute/2,
   execute/3,
   fetch_proplists/3,
   fetch_lists/3,
@@ -14,8 +18,8 @@
 -include_lib("gen_dbi/include/gen_dbi.hrl").
 %%--------------------------------------------------------------------------------------------------
 
-%% TODO: add opts
-connect(Host, Database, Username, Password, _DBDOpts) ->
+%% TODO: merge/validate/convert? opts
+connect(Host, Database, Username, Password, DBDOpts) ->
   try
    case pgsql:connect(Host, Username, Password, [{database, Database}]) of
     {ok, Pid}                                -> {ok, Pid};
@@ -23,17 +27,18 @@ connect(Host, Database, Username, Password, _DBDOpts) ->
     {error, invalid_password}                -> {error, invalid_password};
     {error, <<"3D000">>}                     -> {error, invalid_database};
     
-    Error -> error_logger:error_msg("unknown error: ~p", [Error])
+    Error -> error_logger:error_msg("unknown gen_dbd_pg:connect error: ~p", [Error])
   end
   catch
-    throw:E ->
-      error_logger:error_msg("unknown exception: ~p",[E])
+    C:E ->
+      error_logger:error_msg(
+        "unknown gen_dbd_pg:connect exception, class: \n~p, exception: \n~p",[C,E])
   end.
 
 %%--------------------------------------------------------------------------------------------------
 
 disconnect(C) ->
-  ok = pgsql:close(C#gen_dbi.handle),
+  ok = pgsql:close(C#gen_dbi_dbh.handle),
   ok.
 
 %%--------------------------------------------------------------------------------------------------
@@ -51,6 +56,7 @@ fetch_proplists(C, SQL, Params) ->
       
 loop_fetch_proplists(_Columns, [], Acc) ->
   lists:reverse(Acc);
+
 loop_fetch_proplists(Columns, [Row|Rows], Acc) ->
   NewRow = lists:zipwith(fun(X,Y) -> {X,Y} end, Columns, tuple_to_list(Row)),
   loop_fetch_proplists(Columns, Rows, [NewRow|Acc]).
@@ -82,19 +88,34 @@ fetch_tuples(C, SQL, Params) ->
   end.
 
 %%--------------------------------------------------------------------------------------------------
+
 fetch_records(_C, _SQL, _Params, _RecordName) ->
   todo.
 
 %%--------------------------------------------------------------------------------------------------
 
-execute(C, SQL, Params) ->
+trx_begin(C) ->
+  x = pgsql:execute(C#gen_dbi_dbh.handle, "BEGIN", []),
+  ok.
+
+trx_rollback(C) ->
+  x = pgsql:execute(C#gen_dbi_dbh.handle, "ROLL BACK",[]),
+  ok.
+
+trx_commit(C) ->
+  x = pgsql:execute(C#gen_dbi_dbh.handle, "COMMIT", []),
+  ok.
+
+%%--------------------------------------------------------------------------------------------------
+
+execute(C, SQL, Args) when is_record(C, gen_dbi_dbh) ->
 
   % {ok, Columns, Rows}        = pgsql:equery(C, "select ...", [Parameters]).
   % {ok, Count}                = pgsql:equery(C, "update ...", [Parameters]).
   % {ok, Count, Columns, Rows} = pgsql:equery(C, "insert ... returning ...", [Parameters]).
   % {error, Error}             = pgsql:equery(C, "invalid SQL", [Parameters]).           
 
-  Ret = case pgsql:equery(C#gen_dbi.handle, SQL, Params) of
+  Ret = case pgsql:equery(C#gen_dbi_dbh.handle, SQL, Args) of
     {ok, _Columns, _Rows}=R         -> R;
     {ok, _Count}=R                  -> R;
     {ok, _Count, _Columns, _Rows}=R -> R;
@@ -103,4 +124,25 @@ execute(C, SQL, Params) ->
 
   Ret.
 
+%%--------------------------------------------------------------------------------------------------
+
+execute(C, Args) when is_record(C, gen_dbi_sth) ->
+  Handle = C#gen_dbi_sth.handle,
+  Statement = C#gen_dbi_sth.statement,
+  ok = pgsql:bind(Handle, Statement, Args),
+
+  % {ok | partial, Rows} = pgsql:execute(C, Statement, [PortalName], [MaxRows]).
+  % {ok, Count}          = pgsql:execute(C, Statement, [PortalName]).
+  % {ok, Count, Rows}    = pgsql:execute(C, Statement, [PortalName]).
+  % All functions return {error, Error} when an error occurs.
+
+  Ret = case pgsql:execute(Handle, Statement) of
+    {ok, _RowsOrCount}=R  -> R;
+    {partial, _Rows}=R    -> R;
+    {ok, _Count, _Rows}=R -> R;
+    {error, _Error}=R     -> R
+    end,
+
+  Ret.
+   
 %%--------------------------------------------------------------------------------------------------
