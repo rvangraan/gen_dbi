@@ -21,7 +21,11 @@
   fetch_lists/2,
   fetch_lists/3,
   fetch_tuples/2,
-  fetch_tuples/3
+  fetch_tuples/3,
+  fetch_records/3,
+  fetch_records/4,
+  fetch_structs/3,
+  fetch_structs/4
 ]).
 %%--------------------------------------------------------------------------------------------------
 %% API
@@ -69,6 +73,8 @@ disconnect(C) when is_record(C, gen_dbi_dbh) ->
   ok.
 
 %%--------------------------------------------------------------------------------------------------
+%% Trx
+%%--------------------------------------------------------------------------------------------------
 
 trx_begin(C) ->
   Driver = get_driver_module(C),
@@ -96,7 +102,8 @@ trx(C, Fun) when is_record(C, gen_dbi_dbh), is_function(Fun) ->
 
     error:E ->
       error_logger:error_msg(
-        "unknown gen_dbi:trx error exception, \nclass: ~p, \nexception: ~p\n", [C,E]),
+        "unknown gen_dbi:trx/2 error exception, \nclass: ~p \nexception: ~p\nstacktrace: \n  ~p\n", 
+        [error, E, erlang:get_stacktrace()]),
       {error, system_malfunction}     
   after
     ok = trx_rollback(C)
@@ -110,20 +117,30 @@ trx(Fun) when is_function(Fun) ->
   Ret.  
 
 %%--------------------------------------------------------------------------------------------------
+%% Prepare/Execute
+%%--------------------------------------------------------------------------------------------------
 
+%% TODO: on driver side
 prepare(C, SQL) when is_record(C, gen_dbi_dbh),  is_list(SQL) ->
   Driver = get_driver_module(C),
 
-  %% TODO: errors
-  {ok, Statement} = Driver:prepare(C, SQL),
-  Sth = #gen_dbi_sth{ driver = #gen_dbi_dbh.driver, 
-                      handle = #gen_dbi_dbh.handle, 
-                      statement = Statement},
-  {ok, Sth}.
+  %% TODO: map common errors
+  Ret = case Driver:prepare(C, SQL) of
+    {ok, Statement} ->
+      Sth = #gen_dbi_sth{ driver = #gen_dbi_dbh.driver, 
+                          handle = #gen_dbi_dbh.handle, 
+                          statement = Statement},
+      {ok, Sth};
+
+    {error, Error} -> {error, Error}
+  end,
+  Ret.
 
 %%--------------------------------------------------------------------------------------------------
 
-execute(C, Args) when is_record(C, gen_dbi_sth), is_list(Args) ->
+execute(C, Args) when 
+  is_record(C, gen_dbi_sth), is_list(Args), C#gen_dbi_sth.statement =/= undefined 
+->
   Driver = get_driver_module(C),
   Driver:execute(C, Args);
 
@@ -135,13 +152,15 @@ execute(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args
   Driver:execute(C, SQL, Args).
 
 %%--------------------------------------------------------------------------------------------------
+%% Fetch API: proplists, lists, tuples, records, structs
+%%--------------------------------------------------------------------------------------------------
 
 %% TODO: has to work the same with execute and prepare/execute
 fetch_proplists(C, SQL) when is_record(C, gen_dbi_dbh), is_list(SQL) ->
   fetch_proplists(C, SQL, []).
 
 fetch_proplists(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args) ->
-  Driver = get_driver_module(),
+  Driver = get_driver_module(C),
   Driver:fetch_proplists(C, SQL, Args).
 
 %%--------------------------------------------------------------------------------------------------
@@ -150,7 +169,7 @@ fetch_lists(C, SQL) when is_record(C, gen_dbi_dbh), is_list(SQL) ->
   fetch_lists(C, SQL, []).
 
 fetch_lists(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args) ->
-  Driver = get_driver_module(),
+  Driver = get_driver_module(C),
   Driver:fetch_lists(C, SQL, Args).
 
 %%--------------------------------------------------------------------------------------------------
@@ -159,8 +178,34 @@ fetch_tuples(C, SQL) when is_record(C, gen_dbi_dbh), is_list(SQL) ->
   fetch_tuples(C, SQL, []).
 
 fetch_tuples(C, SQL, Args) when is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args) ->
-  Driver = get_driver_module(),
+  Driver = get_driver_module(C),
   Driver:fetch_tuples(C, SQL, Args).
+
+%%--------------------------------------------------------------------------------------------------
+
+fetch_records(C, SQL, RecordName) when 
+  is_record(C, gen_dbi_dbh), is_list(SQL), is_atom(RecordName) 
+->
+  fetch_records(C, SQL, [], RecordName).
+
+fetch_records(C, SQL, Args, RecordName) when 
+  is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args), is_atom(RecordName) 
+->
+  Driver = get_driver_module(C),
+  Driver:fetch_records(C, SQL, Args, RecordName).
+
+%%--------------------------------------------------------------------------------------------------
+
+fetch_structs(C, SQL, StructName) when 
+  is_record(C, gen_dbi_dbh), is_list(SQL), is_atom(StructName) 
+->
+  fetch_structs(C, SQL, [], StructName).
+
+fetch_structs(C, SQL, Args, StructName) when 
+  is_record(C, gen_dbi_dbh), is_list(SQL), is_list(Args), is_atom(StructName) 
+->
+  Driver = get_driver_module(C),
+  Driver:fetch_structs(C, SQL, Args, StructName).
 
 %%--------------------------------------------------------------------------------------------------
 %% Internal
@@ -174,12 +219,6 @@ get_driver_module(C) when is_record(C, gen_dbi_dbh) ->
 
 get_driver_module(Driver) when is_atom(Driver) ->
   list_to_atom("gen_dbd_" ++ atom_to_list(Driver)).
-
-get_driver_module() ->
-  case application:get_env(gen_dbi, driver) of
-    {ok, Driver} -> list_to_atom("gen_dbd_" ++ atom_to_list(Driver));
-    _            -> throw(undefined_database_driver)
-  end.
 
 %%--------------------------------------------------------------------------------------------------
 

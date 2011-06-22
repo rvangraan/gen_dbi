@@ -7,12 +7,14 @@
   trx_begin/1,
   trx_commit/1,
   trx_rollback/1,
+  prepare/2,
   execute/2,
   execute/3,
   fetch_proplists/3,
   fetch_lists/3,
   fetch_tuples/3,
-  fetch_records/4
+  fetch_records/4,
+  fetch_structs/4
 ]).
 %%--------------------------------------------------------------------------------------------------
 -include_lib("gen_dbi/include/gen_dbi.hrl").
@@ -28,7 +30,7 @@ connect(Host, Database, Username, Password, _DBDOpts) ->
     {error, <<"3D000">>}                     -> {error, invalid_database};
     
     {error, Error} -> 
-      error_logger:error_msg("unknown gen_dbd_pg:connect error: ~p\n", [Error]),
+      error_logger:error_msg("unknown gen_dbd_pg:connect/5 error: ~p\n", [Error]),
       {error, Error}
   end
   catch
@@ -50,7 +52,7 @@ fetch_proplists(C, SQL, Params) ->
   case execute(C, SQL, Params) of
     {ok, Columns, Rows} ->
       ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
-      loop_fetch_proplists(ColNames, Rows, []);
+      {ok, loop_fetch_proplists(ColNames, Rows, [])};
 
     {error, _Error}=R   -> R;
 
@@ -70,7 +72,7 @@ fetch_lists(C, SQL, Params) ->
   case execute(C, SQL, Params) of
     {ok, Columns, Rows} ->
       ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
-      {list_to_tuple(ColNames), [tuple_to_list(R) || R <- Rows]};
+      {ok, {list_to_tuple(ColNames), [tuple_to_list(R) || R <- Rows]}};
 
     {error, _Error}=R   -> R;
 
@@ -83,7 +85,7 @@ fetch_tuples(C, SQL, Params) ->
   case execute(C, SQL, Params) of
     {ok, Columns, Rows} ->
       ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
-      {list_to_tuple(ColNames), Rows};
+      {ok, {list_to_tuple(ColNames), Rows}};
 
     {error, _Error}=R   -> R;
 
@@ -93,7 +95,12 @@ fetch_tuples(C, SQL, Params) ->
 %%--------------------------------------------------------------------------------------------------
 
 fetch_records(_C, _SQL, _Params, _RecordName) ->
-  todo.
+  {ok, todo}.
+
+%%--------------------------------------------------------------------------------------------------
+
+fetch_structs(_C, _SQL, _Params, _StructName) ->
+  {ok, todo}.
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -122,7 +129,30 @@ execute(C, SQL, Args) when is_record(C, gen_dbi_dbh) ->
     {ok, _Columns, _Rows}=R         -> R;
     {ok, _Count}=R                  -> R;
     {ok, _Count, _Columns, _Rows}=R -> R;
-    {error, _Error}=R               -> R
+
+    %% TODO: map errors
+
+    {error, Error} ->
+      error_logger:error_msg("unknown gen_dbd_pg:execute/3 error: ~p\n", [Error]),
+      {error, Error}
+  end,
+
+  Ret.
+
+%%--------------------------------------------------------------------------------------------------
+
+prepare(C, SQL) ->
+  Handle = C#gen_dbi_dbh.handle,
+
+  Ret = case pgsql:parse(Handle, SQL) of
+    {ok, Statement}                       -> {ok, Statement};
+    {error,{error,error,<<"42601">>,_,_}} -> {error, syntax_error};
+
+    %% TODO: map errors
+
+    {error, Error} ->
+      error_logger:error_msg("unknown gen_dbd_pg:prepare/2 error: ~p\n", [Error]),
+      {error, Error}
   end,
 
   Ret.
@@ -132,6 +162,8 @@ execute(C, SQL, Args) when is_record(C, gen_dbi_dbh) ->
 execute(C, Args) when is_record(C, gen_dbi_sth) ->
   Handle = C#gen_dbi_sth.handle,
   Statement = C#gen_dbi_sth.statement,
+
+  %% TODO: error check?
   ok = pgsql:bind(Handle, Statement, Args),
 
   % {ok | partial, Rows} = pgsql:execute(C, Statement, [PortalName], [MaxRows]).
@@ -143,7 +175,12 @@ execute(C, Args) when is_record(C, gen_dbi_sth) ->
     {ok, _RowsOrCount}=R  -> R;
     {partial, _Rows}=R    -> R;
     {ok, _Count, _Rows}=R -> R;
-    {error, _Error}=R     -> R
+
+    %% TODO: map errors
+
+    {error, Error} ->
+      error_logger:error_msg("unknown gen_dbd_pg:execute/2 error: ~p\n", [Error]),
+      {error, Error}
     end,
 
   Ret.

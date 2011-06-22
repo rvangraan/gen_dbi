@@ -5,6 +5,18 @@
 -include_lib("gen_dbi/include/gen_dbi.hrl").
 %%--------------------------------------------------------------------------------------------------
 
+-define(CURRENCY_SELECT,
+{ok,[{column,<<"u_id">>,int4,4,-1,1},
+     {column,<<"u_code">>,bpchar,-1,7,1},
+     {column,<<"u_name">>,varchar,-1,259,1}],
+    [{840,<<"USD">>,<<"US DOLLAR">>},
+     {710,<<"ZAR">>,<<"SOUTH AFRICAN RAND">>},
+     {826,<<"GBP">>,<<"POUND STERLING">>},
+     {978,<<"EUR">>,<<"EURO">>},
+     {392,<<"JPY">>,<<"JAPANESE YEN">>}]}).
+
+%%--------------------------------------------------------------------------------------------------
+
 connect_ok_test() ->
   F1 = fun(Host, User, Passwd, Opts) ->
     ?assertEqual(Host, "host"),
@@ -172,6 +184,22 @@ execute_select_test() ->
 
 %%--------------------------------------------------------------------------------------------------
 
+execute_error_test() ->
+  F1 = fun(_Handle, _SQL, _Args) ->
+    {ok, 42}
+  end,
+
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  ?assertEqual({ok, 42} , gen_dbi:execute(C, "SELECT * FROM something", [])),
+
+  meck:unload(pgsql).  
+
+%%--------------------------------------------------------------------------------------------------
+
 execute_update_test() ->
   Count = 42,
 
@@ -232,7 +260,7 @@ trx_ok_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, equery, F1),
 
-  Ret = gen_dbi:trx(C, fun(C1) -> gen_dbi:execute(C1, "SELECT * FROM something",[]) end),
+  Ret = gen_dbi:trx(C, fun(C1) -> gen_dbi:execute(C1, "SELECT * FROM something") end),
   ?assertEqual(Ret, {ok,[],[{},{}]} ),
   
   meck:unload(pgsql).
@@ -272,7 +300,7 @@ trx_exception_test() ->
   meck:new(pgsql),
   meck:expect(pgsql, equery, F1),
 
-  Ret = gen_dbi:trx(C, fun(C1) -> erlang:error(43) end),
+  Ret = gen_dbi:trx(C, fun(_C1) -> erlang:error(43) end),
   ?assertEqual(Ret, {error, system_malfunction}),
   
   meck:unload(pgsql).  
@@ -307,6 +335,151 @@ trx_ok_auto_connect_test() ->
   
 %%--------------------------------------------------------------------------------------------------
 
+prepare_ok_test() ->
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
+  F1 = fun(_C, "SELECT * FROM something WHERE bla = ?") -> {ok, 42} end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, parse, F1),
+
+  {ok, Ret} = gen_dbi:prepare(C, "SELECT * FROM something WHERE bla = ?"),
+  ?assertEqual(Ret#gen_dbi_sth.statement, 42 ),
+
+  meck:unload(pgsql).
+
+%%--------------------------------------------------------------------------------------------------
+
+prepare_error_test() ->
+  C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
+  F1 = fun(_C, "SLECT * FROM something WHERE bla = ?") -> 
+    {error,{error,error,<<"42601">>,[],[]}}
+  end,
+
+  F2 = fun(_C, "SLECT * FROM something WHERE bla = ?") -> 
+    {error, 42}
+  end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, parse, F1),
+
+  Ret1 = gen_dbi:prepare(C, "SLECT * FROM something WHERE bla = ?"),
+  ?assertEqual(Ret1, {error, syntax_error} ),
+
+  meck:expect(pgsql, parse, F2),
+  Ret2 = gen_dbi:prepare(C, "SLECT * FROM something WHERE bla = ?"),
+  ?assertEqual(Ret2, {error, 42} ),
+
+  meck:unload(pgsql).  
+
+%%--------------------------------------------------------------------------------------------------
+
+prepare_execute_ok_test() ->
+  C = #gen_dbi_sth{ driver = gen_dbd_pg, handle = pid, statement = 42},
+
+  F1 = fun(_Handle, _Statement, _Args) -> ok end,
+  F2 = fun(_Handle, _Statement) -> {ok, [{},{}]} end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, bind, F1),
+  meck:expect(pgsql, execute, F2),
+
+  Ret = gen_dbi:execute(C, [42]),
+  ?assertEqual(Ret, {ok, [{},{}]} ),
+  meck:unload(pgsql).
+
+%%--------------------------------------------------------------------------------------------------
+
+prepare_execute_error_test() ->
+  C = #gen_dbi_sth{ driver = gen_dbd_pg, handle = pid, statement = 42},
+
+  F1 = fun(_Handle, _Statement, _Args) -> ok end,
+  F2 = fun(_Handle, _Statement) -> {error, 42} end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, bind, F1),
+  meck:expect(pgsql, execute, F2),
+
+  Ret = gen_dbi:execute(C, [42]),
+  ?assertEqual(Ret, {error, 42} ),
+  meck:unload(pgsql).   
+
+%%--------------------------------------------------------------------------------------------------
+
+fetch_lists_ok_test() ->
+  C = #gen_dbi_dbh{ driver = gen_dbd_pg, handle = pid},
+
+  F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  {ok, Ret} = gen_dbi:fetch_lists(C, "SELECT * FROM CURRENCY"),
+  ?assertEqual(Ret,
+    {
+      {u_id,u_code,u_name},
+      [
+        [840,<<"USD">>,<<"US DOLLAR">>],
+        [710,<<"ZAR">>,<<"SOUTH AFRICAN RAND">>],
+        [826,<<"GBP">>,<<"POUND STERLING">>],
+        [978,<<"EUR">>,<<"EURO">>],
+        [392,<<"JPY">>,<<"JAPANESE YEN">>]
+      ]
+    }),
+  meck:unload(pgsql).   
+
+%%--------------------------------------------------------------------------------------------------
+
+fetch_proplists_ok_test() ->
+  C = #gen_dbi_dbh{ driver = gen_dbd_pg, handle = pid},
+
+  F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  {ok, Ret} = gen_dbi:fetch_proplists(C, "SELECT * FROM CURRENCY"),
+  ?assertEqual(Ret,
+    [
+     [{u_id,840},
+      {u_code,<<"USD">>},
+      {u_name,<<"US DOLLAR">>}],
+     [{u_id,710},
+      {u_code,<<"ZAR">>},
+      {u_name,<<"SOUTH AFRICAN RAND">>}],
+     [{u_id,826},
+      {u_code,<<"GBP">>},
+      {u_name,<<"POUND STERLING">>}],
+     [{u_id,978},
+      {u_code,<<"EUR">>},
+      {u_name,<<"EURO">>}],
+     [{u_id,392},
+      {u_code,<<"JPY">>},
+      {u_name,<<"JAPANESE YEN">>}]
+    ]),
+  meck:unload(pgsql).  
+
+%%--------------------------------------------------------------------------------------------------
+
+fetch_tuples_ok_test() ->
+  C = #gen_dbi_dbh{ driver = gen_dbd_pg, handle = pid},
+
+  F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  {ok, Ret} = gen_dbi:fetch_tuples(C, "SELECT * FROM CURRENCY"),
+  ?assertEqual(Ret,
+    {{u_id,u_code,u_name},
+     [{840,<<"USD">>,<<"US DOLLAR">>},
+      {710,<<"ZAR">>,<<"SOUTH AFRICAN RAND">>},
+      {826,<<"GBP">>,<<"POUND STERLING">>},
+      {978,<<"EUR">>,<<"EURO">>},
+      {392,<<"JPY">>,<<"JAPANESE YEN">>}]
+    }),
+  meck:unload(pgsql).  
+
+%%--------------------------------------------------------------------------------------------------
 
 start_stop_test() ->
   ok = application:start(gen_dbi),
@@ -315,3 +488,4 @@ start_stop_test() ->
   ok.
 
 %%--------------------------------------------------------------------------------------------------
+
