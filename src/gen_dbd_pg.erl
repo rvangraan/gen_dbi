@@ -116,20 +116,19 @@ fetch_structs(C, SQL, Params, StructName) ->
   case execute(C, SQL, Params) of
     {ok, Columns, Rows} ->
       ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
-      {ok, loop_fetch_structs(ColNames, Rows, [], StructName)};
+      {ok, loop_fetch_structs(Rows, [], StructName)};
 
     {error, _Error}=R   -> R;
 
     _                   -> throw(not_a_select)
   end.
 
-loop_fetch_structs(_Columns, [], Acc, _StructName) ->
+loop_fetch_structs([], Acc, _StructName) ->
   lists:reverse(Acc);
 
-loop_fetch_structs(Columns, [Row|Rows], Acc, StructName) ->
-  Proplist = lists:zipwith(fun(X,Y) -> {X,Y} end, Columns, tuple_to_list(Row)),
-  Struct = StructName:new(Proplist),
-  loop_fetch_structs(Columns, Rows, [Struct|Acc], StructName).
+loop_fetch_structs([Row|Rows], Acc, StructName) ->
+  Struct = StructName:new_from_tuple(Row),
+  loop_fetch_structs(Rows, [Struct|Acc], StructName).
 
 %%--------------------------------------------------------------------------------------------------
 
