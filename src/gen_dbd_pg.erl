@@ -94,13 +94,42 @@ fetch_tuples(C, SQL, Params) ->
 
 %%--------------------------------------------------------------------------------------------------
 
-fetch_records(_C, _SQL, _Params, _RecordName) ->
-  {ok, todo}.
+fetch_records(C, SQL, Params, RecordName) ->
+  case execute(C, SQL, Params) of
+    {ok, _Columns, Rows} ->
+      {ok, loop_fetch_records(Rows, RecordName, [])};
+
+    {error, _Error}=R   -> R;
+
+    _                   -> throw(not_a_select)
+  end.
+
+loop_fetch_records([], _RecordName, Acc) ->
+  lists:reverse(Acc);
+loop_fetch_records([Row|Rows], RecordName, Acc) ->
+  Row1 = list_to_tuple([RecordName] ++ tuple_to_list(Row)),
+  loop_fetch_records(Rows, RecordName, [Row1|Acc]).
 
 %%--------------------------------------------------------------------------------------------------
 
-fetch_structs(_C, _SQL, _Params, _StructName) ->
-  {ok, todo}.
+fetch_structs(C, SQL, Params, StructName) ->
+  case execute(C, SQL, Params) of
+    {ok, Columns, Rows} ->
+      ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
+      {ok, loop_fetch_structs(ColNames, Rows, [], StructName)};
+
+    {error, _Error}=R   -> R;
+
+    _                   -> throw(not_a_select)
+  end.
+
+loop_fetch_structs(_Columns, [], Acc, _StructName) ->
+  lists:reverse(Acc);
+
+loop_fetch_structs(Columns, [Row|Rows], Acc, StructName) ->
+  Proplist = lists:zipwith(fun(X,Y) -> {X,Y} end, Columns, tuple_to_list(Row)),
+  Struct = StructName:new(Proplist),
+  loop_fetch_structs(Columns, Rows, [Struct|Acc], StructName).
 
 %%--------------------------------------------------------------------------------------------------
 

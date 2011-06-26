@@ -1,0 +1,3 @@
+-module(currency).
+-include_lib("gen_struct/include/gen_struct.hrl").
+-record(currency,{u_id, u_code, u_name}).

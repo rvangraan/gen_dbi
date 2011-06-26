@@ -481,6 +481,48 @@ fetch_tuples_ok_test() ->
 
 %%--------------------------------------------------------------------------------------------------
 
+fetch_records_ok_test() ->
+  C = #gen_dbi_dbh{ driver = gen_dbd_pg, handle = pid},
+
+  F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  {ok, Ret} = gen_dbi:fetch_records(C, "SELECT * FROM CURRENCY", some_record),
+  ?assertEqual(Ret,
+    [
+      {some_record,840,<<"USD">>,<<"US DOLLAR">>},
+      {some_record,710,<<"ZAR">>,<<"SOUTH AFRICAN RAND">>},
+      {some_record,826,<<"GBP">>,<<"POUND STERLING">>},
+      {some_record,978,<<"EUR">>,<<"EURO">>},
+      {some_record,392,<<"JPY">>,<<"JAPANESE YEN">>}
+    ]),
+  meck:unload(pgsql).  
+
+%%--------------------------------------------------------------------------------------------------
+
+fetch_structs_ok_test() ->
+  C = #gen_dbi_dbh{ driver = gen_dbd_pg, handle = pid},
+
+  F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
+
+  meck:new(pgsql),
+  meck:expect(pgsql, equery, F1),
+
+  {ok, Ret} = gen_dbi:fetch_structs(C, "SELECT * FROM CURRENCY", currency),
+  ?assertEqual(Ret,
+    [
+      {currency,840,<<"USD">>,<<"US DOLLAR">>},
+      {currency,710,<<"ZAR">>,<<"SOUTH AFRICAN RAND">>},
+      {currency,826,<<"GBP">>,<<"POUND STERLING">>},
+      {currency,978,<<"EUR">>,<<"EURO">>},
+      {currency,392,<<"JPY">>,<<"JAPANESE YEN">>}
+    ]),
+  meck:unload(pgsql).
+
+%%--------------------------------------------------------------------------------------------------
+
 start_stop_test() ->
   ok = application:start(gen_dbi),
   ok = application:stop(gen_dbi),
@@ -488,4 +530,3 @@ start_stop_test() ->
   ok.
 
 %%--------------------------------------------------------------------------------------------------
-
