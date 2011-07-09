@@ -24,20 +24,12 @@
 connect(Host, Database, Username, Password, _DBDOpts) ->
   try
    case pgsql:connect(Host, Username, Password, [{database, Database}]) of
-    {ok, Pid}                                -> {ok, Pid};
-    {error, {{badmatch,{error,nxdomain}},_}} -> {error, invalid_hostname};
-    {error, invalid_password}                -> {error, invalid_password};
-    {error, <<"3D000">>}                     -> {error, invalid_database};
-    
-    {error, Error} -> 
-      error_logger:error_msg("unknown gen_dbd_pg:connect/5 error: ~p\n", [Error]),
-      {error, Error}
+    {ok, Pid}      -> {ok, Pid};
+    {error, Error} -> handle_error(Error)
   end
   catch
     C:E ->
-      error_logger:error_msg(
-        "unknown gen_dbd_pg:connect exception \nclass: ~p \nexception: ~p\n",[C,E]),
-        {error, unable_to_connect}
+      handle_exception(C, E)
   end.
 
 %%--------------------------------------------------------------------------------------------------
@@ -54,7 +46,7 @@ fetch_proplists(C, SQL, Params) ->
       ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
       {ok, loop_fetch_proplists(ColNames, Rows, [])};
 
-    {error, _Error}=R   -> R;
+    {error, Error}      -> handle_error(Error);
 
     _                   -> throw(not_a_select)
   end.
@@ -74,7 +66,7 @@ fetch_lists(C, SQL, Params) ->
       ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
       {ok, {list_to_tuple(ColNames), [tuple_to_list(R) || R <- Rows]}};
 
-    {error, _Error}=R   -> R;
+      {error, Error}    -> handle_error(Error);
 
     _                   -> throw(not_a_select)
   end.
@@ -87,7 +79,7 @@ fetch_tuples(C, SQL, Params) ->
       ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
       {ok, {list_to_tuple(ColNames), Rows}};
 
-    {error, _Error}=R   -> R;
+    {error, Error}      -> handle_error(Error);
 
     _                   -> throw(not_a_select)
   end.
@@ -99,7 +91,7 @@ fetch_records(C, SQL, Params, RecordName) ->
     {ok, _Columns, Rows} ->
       {ok, loop_fetch_records(Rows, RecordName, [])};
 
-    {error, _Error}=R   -> R;
+    {error, Error}      -> handle_error(Error);
 
     _                   -> throw(not_a_select)
   end.
@@ -118,7 +110,7 @@ fetch_structs(C, SQL, Params, StructName) ->
       ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
       {ok, loop_fetch_structs(Rows, [], StructName)};
 
-    {error, _Error}=R   -> R;
+    {error, Error}      -> handle_error(Error);
 
     _                   -> throw(not_a_select)
   end.
@@ -133,15 +125,24 @@ loop_fetch_structs([Row|Rows], Acc, StructName) ->
 %%--------------------------------------------------------------------------------------------------
 
 trx_begin(C) ->
-  {ok,_,_} = execute(C, "BEGIN", []),
+  case execute(C, "BEGIN",[]) of
+    {ok,_,_} -> ok;
+    ok -> ok
+  end,
   ok.
 
 trx_rollback(C) ->
-  {ok,_,_} = execute(C, "ROLLBACK",[]),
+  case execute(C, "ROLLBACK",[]) of
+    {ok,_,_} -> ok;
+    ok -> ok
+  end,
   ok.
 
 trx_commit(C) ->
-  {ok,_,_} = execute(C, "COMMIT", []),
+  case execute(C, "COMMIT", []) of
+    {ok,_,_} -> ok;
+    ok -> ok
+  end,
   ok.
 
 %%--------------------------------------------------------------------------------------------------
@@ -153,16 +154,15 @@ execute(C, SQL, Args) when is_record(C, gen_dbi_dbh) ->
   % {ok, Count, Columns, Rows} = pgsql:equery(C, "insert ... returning ...", [Parameters]).
   % {error, Error}             = pgsql:equery(C, "invalid SQL", [Parameters]).           
 
-  Ret = case pgsql:equery(C#gen_dbi_dbh.handle, SQL, Args) of
+  Handle = C#gen_dbi_dbh.handle,
+
+  Ret = case pgsql:equery(Handle, SQL, Args) of
     {ok, _Columns, _Rows}=R         -> R;
     {ok, _Count}=R                  -> R;
     {ok, _Count, _Columns, _Rows}=R -> R;
-
-    %% TODO: map errors
-
-    {error, Error} ->
-      error_logger:error_msg("unknown gen_dbd_pg:execute/3 error: ~p\n", [Error]),
-      {error, Error}
+    {error, Error}                  -> 
+      ok = pgsql:sync(Handle),
+      handle_error(Error)
   end,
 
   Ret.
@@ -173,14 +173,8 @@ prepare(C, SQL) ->
   Handle = C#gen_dbi_dbh.handle,
 
   Ret = case pgsql:parse(Handle, SQL) of
-    {ok, Statement}                       -> {ok, Statement};
-    {error,{error,error,<<"42601">>,_,_}} -> {error, syntax_error};
-
-    %% TODO: map errors
-
-    {error, Error} ->
-      error_logger:error_msg("unknown gen_dbd_pg:prepare/2 error: ~p\n", [Error]),
-      {error, Error}
+    {ok, Statement} -> {ok, Statement};
+    {error, Error}  -> handle_error(Error)
   end,
 
   Ret.
@@ -203,14 +197,53 @@ execute(C, Args) when is_record(C, gen_dbi_sth) ->
     {ok, _RowsOrCount}=R  -> R;
     {partial, _Rows}=R    -> R;
     {ok, _Count, _Rows}=R -> R;
-
-    %% TODO: map errors
-
-    {error, Error} ->
-      error_logger:error_msg("unknown gen_dbd_pg:execute/2 error: ~p\n", [Error]),
-      {error, Error}
+    {error, Error}        -> 
+      ok = pgsql:sync(Handle),
+      handle_error(Error)
     end,
+
+  % case Ret of
+  %   {ok, _} -> ok = pgsql:close(Handle, Statement), ok = pgsql:sync(Handle);
+  %   {ok, _, _} -> ok = pgsql:close(Handle, Statement), ok = pgsql:sync(Handle);
+  %   _ -> ok
+  % end,
 
   Ret.
    
 %%--------------------------------------------------------------------------------------------------
+
+%% todo add scenarios
+
+handle_error(Error) ->
+  case Error of
+    {{badmatch,{error,nxdomain}},_} -> {error, invalid_hostname};
+    invalid_password                -> {error, invalid_password};
+    <<"3D000">>                     -> {error, invalid_database};
+
+    {error, error, <<"42601">>, Message, Params} -> 
+      {error, invalid_syntax, [{message, Message}] ++ Params };
+
+    {error, error, <<"23505">>, Message, Params} ->
+      {error, unique_constraint, [{message, Message}] ++ Params};
+
+    _ ->
+    error_logger:error_msg("unknown gen_dbd_pg error: ~p\n", [Error]),
+    {error, Error}
+  end.
+
+%%--------------------------------------------------------------------------------------------------  
+
+%% todo add scenarios
+
+handle_exception(C, E) ->
+  error_logger:error_msg(
+    "unknown gen_dbd_pg:connect exception \nclass: ~p \nexception: ~p\n",[C, E]),
+  {error, system_malfunction}.
+
+%% catch this
+%%{noproc,{gen_fsm,sync_send_event,
+                                    % [<0.272.0>,
+                                    %  {parse,[],"INSERT INTO currency VALUES ($1, $2, $3);",[]},
+                                    %  infinity]}}
+
+%%--------------------------------------------------------------------------------------------------  

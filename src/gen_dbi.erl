@@ -55,7 +55,8 @@ connect(Driver, Host, Database, Username, Password, DriverOpts) ->
   %% TODO common errors/exceptions?
   case is_driver_supported(Driver) of
     true  ->
-      Module = get_driver_module(Driver), 
+      Module = get_driver_module(Driver),
+      io:format("** Module: ~p\n",[Module]),
       case Module:connect(Host, Database, Username, Password, DriverOpts) of
         {ok, C}        -> {ok, #gen_dbi_dbh{driver = Module, handle = C}};
         {error, Error} -> {error, Error}
@@ -128,12 +129,14 @@ prepare(C, SQL) when is_record(C, gen_dbi_dbh),  is_list(SQL) ->
   %% TODO: map common errors
   Ret = case Driver:prepare(C, SQL) of
     {ok, Statement} ->
-      Sth = #gen_dbi_sth{ driver = #gen_dbi_dbh.driver, 
-                          handle = #gen_dbi_dbh.handle, 
+      Sth = #gen_dbi_sth{ driver = C#gen_dbi_dbh.driver, 
+                          handle = C#gen_dbi_dbh.handle, 
                           statement = Statement},
       {ok, Sth};
 
-    {error, Error} -> {error, Error}
+    %% TODO convert all errors to {err, type, details} ??
+    {error, Error} -> {error, Error};
+    {error, Error, Details} -> {error, Error, Details}
   end,
   Ret.
 

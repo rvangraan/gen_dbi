@@ -17,6 +17,15 @@
 
 %%--------------------------------------------------------------------------------------------------
 
+mock(M) -> 
+  ProcName = list_to_atom(atom_to_list(M) ++ "_meck"),
+  case whereis(ProcName) of
+    undefined -> meck:new(M);
+    _Pid -> meck:unload(M), meck:new(M)
+  end.
+
+%%--------------------------------------------------------------------------------------------------
+
 connect_ok_test() ->
   F1 = fun(Host, User, Passwd, Opts) ->
     ?assertEqual(Host, "host"),
@@ -31,9 +40,7 @@ connect_ok_test() ->
 
   {ok, C} = gen_dbi:connect(pg, "host", "db", "user", "passwd", []),
   ?assertEqual(C#gen_dbi_dbh.driver, gen_dbd_pg),
-  ?assertEqual(C#gen_dbi_dbh.handle, pid),
-
-  meck:unload(pgsql).
+  ?assertEqual(C#gen_dbi_dbh.handle, pid).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -42,12 +49,10 @@ connect_error_test() ->
     {error, 42}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  ?assertEqual({error, 42} , gen_dbi:connect(pg, "host", "db", "user", "passwd", [])),
-
-  meck:unload(pgsql).
+  ?assertEqual({error, 42} , gen_dbi:connect(pg, "host", "db", "user", "passwd", [])).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -56,12 +61,10 @@ connect_throw_test() ->
     throw(42)
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  ?assertEqual({error, unable_to_connect} , gen_dbi:connect(pg, "host", "db", "user", "passwd", [])),
-
-  meck:unload(pgsql).
+  ?assertEqual({error,system_malfunction}, gen_dbi:connect(pg, "host", "db", "user", "passwd", [])).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -74,13 +77,11 @@ connect_default_params_test() ->
     {ok, pid}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, connect, F1),
 
   {ok, C} = gen_dbi:connect(),
-  ?assertEqual(C#gen_dbi_dbh.handle, pid),
-
-  meck:unload(pgsql).  
+  ?assertEqual(C#gen_dbi_dbh.handle, pid).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -89,12 +90,10 @@ connect_fail_host_test() ->
     {error,{{badmatch,{error,nxdomain}},[]}}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  ?assertEqual({error, invalid_hostname} , gen_dbi:connect(pg, "host", "db", "user", "passwd", [])),
-
-  meck:unload(pgsql).
+  ?assertEqual({error, invalid_hostname} , gen_dbi:connect(pg, "host", "db", "user", "passwd", [])).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -108,12 +107,10 @@ connect_fail_username_test() ->
     {error, invalid_password}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  ?assertEqual({error, invalid_password} , gen_dbi:connect(pg, "host", "db", "xxx", "passwd", [])),
-
-  meck:unload(pgsql).
+  ?assertEqual({error, invalid_password} , gen_dbi:connect(pg, "host", "db", "xxx", "passwd", [])).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -122,12 +119,10 @@ connect_fail_password_test() ->
     {error, invalid_password}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  ?assertEqual({error, invalid_password} , gen_dbi:connect(pg, "host", "db", "user", "xxx", [])),
-
-  meck:unload(pgsql).
+  ?assertEqual({error, invalid_password} , gen_dbi:connect(pg, "host", "db", "user", "xxx", [])).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -136,12 +131,10 @@ connect_fail_database_test() ->
     {error,  <<"3D000">>}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, connect, F1),
 
-  ?assertEqual({error, invalid_database} , gen_dbi:connect(pg, "host", "xxx", "user", "passwd", [])),
-
-  meck:unload(pgsql).
+  ?assertEqual({error, invalid_database} , gen_dbi:connect(pg, "host", "xxx", "user", "passwd", [])).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -153,12 +146,10 @@ disconnect_ok_test() ->
 
   C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, close, F1),
 
-  ?assertEqual(ok , gen_dbi:disconnect(C)),
-
-  meck:unload(pgsql).
+  ?assertEqual(ok , gen_dbi:disconnect(C)).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -175,12 +166,10 @@ execute_select_test() ->
 
   C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
-  ?assertEqual({ok, Columns, Rows} , gen_dbi:execute(C, "SELECT * FROM something", [])),
-
-  meck:unload(pgsql).
+  ?assertEqual({ok, Columns, Rows} , gen_dbi:execute(C, "SELECT * FROM something", [])).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -191,12 +180,10 @@ execute_error_test() ->
 
   C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
-  ?assertEqual({ok, 42} , gen_dbi:execute(C, "SELECT * FROM something", [])),
-
-  meck:unload(pgsql).  
+  ?assertEqual({ok, 42} , gen_dbi:execute(C, "SELECT * FROM something", [])).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -212,12 +199,10 @@ execute_update_test() ->
 
   C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
-  ?assertEqual({ok, Count} , gen_dbi:execute(C, "UPDATE something SET something = something", [])),
-
-  meck:unload(pgsql).
+  ?assertEqual({ok, Count} , gen_dbi:execute(C, "UPDATE something SET something = something", [])).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -235,15 +220,13 @@ execute_insert_test() ->
 
   C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
   ?assertEqual(
     {ok, Count, Columns, Rows},
     gen_dbi:execute(C, "INSERT INTO something VALUES (something)", [])
-  ),
-
-  meck:unload(pgsql).
+  ).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -257,14 +240,11 @@ trx_ok_test() ->
        (_Handle, "SELECT * FROM something", _Args) -> {ok, [], [{},{}]}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
   Ret = gen_dbi:trx(C, fun(C1) -> gen_dbi:execute(C1, "SELECT * FROM something") end),
-  ?assertEqual(Ret, {ok,[],[{},{}]} ),
-  
-  meck:unload(pgsql).
-
+  ?assertEqual(Ret, {ok,[],[{},{}]} ).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -278,13 +258,11 @@ trx_error_test() ->
        (_Handle, "SELECT * FROM something", _Args) -> throw(43)
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
   Ret = gen_dbi:trx(C, fun(C1) -> gen_dbi:execute(C1, "SELECT * FROM something",[]) end),
-  ?assertEqual(Ret, {error, 43}),
-  
-  meck:unload(pgsql).  
+  ?assertEqual(Ret, {error, 43}).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -297,13 +275,11 @@ trx_exception_test() ->
        (_Handle, "ROLLBACK", _Args) -> {ok,1,2}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
   Ret = gen_dbi:trx(C, fun(_C1) -> erlang:error(43) end),
-  ?assertEqual(Ret, {error, system_malfunction}),
-  
-  meck:unload(pgsql).  
+  ?assertEqual(Ret, {error, system_malfunction}).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -323,29 +299,25 @@ trx_ok_auto_connect_test() ->
     ok
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
   meck:expect(pgsql, connect, F2),
   meck:expect(pgsql, close, F3),
 
   Ret = gen_dbi:trx(fun(C) -> gen_dbi:execute(C, "SELECT * FROM something",[]) end),
-  ?assertEqual(Ret, {ok,[],[{},{}]} ),
+  ?assertEqual(Ret, {ok,[],[{},{}]} ).
 
-  meck:unload(pgsql).  
-  
 %%--------------------------------------------------------------------------------------------------
 
 prepare_ok_test() ->
   C = #gen_dbi_dbh{driver = gen_dbd_pg, handle = pid},
   F1 = fun(_C, "SELECT * FROM something WHERE bla = ?") -> {ok, 42} end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, parse, F1),
 
   {ok, Ret} = gen_dbi:prepare(C, "SELECT * FROM something WHERE bla = ?"),
-  ?assertEqual(Ret#gen_dbi_sth.statement, 42 ),
-
-  meck:unload(pgsql).
+  ?assertEqual(Ret#gen_dbi_sth.statement, 42 ).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -359,17 +331,15 @@ prepare_error_test() ->
     {error, 42}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, parse, F1),
 
   Ret1 = gen_dbi:prepare(C, "SLECT * FROM something WHERE bla = ?"),
-  ?assertEqual(Ret1, {error, syntax_error} ),
+  ?assertEqual(Ret1, {error, invalid_syntax, [{message,[]}]} ),
 
   meck:expect(pgsql, parse, F2),
   Ret2 = gen_dbi:prepare(C, "SLECT * FROM something WHERE bla = ?"),
-  ?assertEqual(Ret2, {error, 42} ),
-
-  meck:unload(pgsql).  
+  ?assertEqual(Ret2, {error, 42} ).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -379,14 +349,13 @@ prepare_execute_ok_test() ->
   F1 = fun(_Handle, _Statement, _Args) -> ok end,
   F2 = fun(_Handle, _Statement) -> {ok, [{},{}]} end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, bind, F1),
   meck:expect(pgsql, execute, F2),
 
   Ret = gen_dbi:execute(C, [42]),
-  ?assertEqual(Ret, {ok, [{},{}]} ),
-  meck:unload(pgsql).
-
+  ?assertEqual(Ret, {ok, [{},{}]} ).
+  
 %%--------------------------------------------------------------------------------------------------
 
 prepare_execute_error_test() ->
@@ -394,15 +363,16 @@ prepare_execute_error_test() ->
 
   F1 = fun(_Handle, _Statement, _Args) -> ok end,
   F2 = fun(_Handle, _Statement) -> {error, 42} end,
+  F3 = fun(_Handle) -> ok end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, bind, F1),
   meck:expect(pgsql, execute, F2),
+  meck:expect(pgsql, sync, F3),
 
   Ret = gen_dbi:execute(C, [42]),
-  ?assertEqual(Ret, {error, 42} ),
-  meck:unload(pgsql).   
-
+  ?assertEqual(Ret, {error, 42} ).
+  
 %%--------------------------------------------------------------------------------------------------
 
 fetch_lists_ok_test() ->
@@ -410,7 +380,7 @@ fetch_lists_ok_test() ->
 
   F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
   {ok, Ret} = gen_dbi:fetch_lists(C, "SELECT * FROM CURRENCY"),
@@ -424,8 +394,7 @@ fetch_lists_ok_test() ->
         [978,<<"EUR">>,<<"EURO">>],
         [392,<<"JPY">>,<<"JAPANESE YEN">>]
       ]
-    }),
-  meck:unload(pgsql).   
+    }).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -434,7 +403,7 @@ fetch_proplists_ok_test() ->
 
   F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
   {ok, Ret} = gen_dbi:fetch_proplists(C, "SELECT * FROM CURRENCY"),
@@ -455,8 +424,7 @@ fetch_proplists_ok_test() ->
      [{u_id,392},
       {u_code,<<"JPY">>},
       {u_name,<<"JAPANESE YEN">>}]
-    ]),
-  meck:unload(pgsql).  
+    ]).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -465,7 +433,7 @@ fetch_tuples_ok_test() ->
 
   F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
   {ok, Ret} = gen_dbi:fetch_tuples(C, "SELECT * FROM CURRENCY"),
@@ -476,8 +444,7 @@ fetch_tuples_ok_test() ->
       {826,<<"GBP">>,<<"POUND STERLING">>},
       {978,<<"EUR">>,<<"EURO">>},
       {392,<<"JPY">>,<<"JAPANESE YEN">>}]
-    }),
-  meck:unload(pgsql).  
+    }).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -486,7 +453,7 @@ fetch_records_ok_test() ->
 
   F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
   {ok, Ret} = gen_dbi:fetch_records(C, "SELECT * FROM CURRENCY", some_record),
@@ -497,8 +464,7 @@ fetch_records_ok_test() ->
       {some_record,826,<<"GBP">>,<<"POUND STERLING">>},
       {some_record,978,<<"EUR">>,<<"EURO">>},
       {some_record,392,<<"JPY">>,<<"JAPANESE YEN">>}
-    ]),
-  meck:unload(pgsql).  
+    ]).
 
 %%--------------------------------------------------------------------------------------------------
 
@@ -507,7 +473,7 @@ fetch_structs_ok_test() ->
 
   F1 = fun(_Handle, _SQL, _Args) -> ?CURRENCY_SELECT end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
   {ok, Ret} = gen_dbi:fetch_structs(C, "SELECT * FROM CURRENCY", currency),
@@ -518,8 +484,7 @@ fetch_structs_ok_test() ->
       {currency,826,<<"GBP">>,<<"POUND STERLING">>},
       {currency,978,<<"EUR">>,<<"EURO">>},
       {currency,392,<<"JPY">>,<<"JAPANESE YEN">>}
-    ]),
-  meck:unload(pgsql).
+    ]).
 
 %%--------------------------------------------------------------------------------------------------
 
