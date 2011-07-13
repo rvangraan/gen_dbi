@@ -16,16 +16,21 @@
   prepare/2,
   execute/2,
   execute/3,
-  fetch_proplists/2,
-  fetch_proplists/3,
   fetch_lists/2,
   fetch_lists/3,
   fetch_tuples/2,
   fetch_tuples/3,
+  fetch_proplists/2,
+  fetch_proplists/3,
   fetch_records/3,
   fetch_records/4,
   fetch_structs/3,
-  fetch_structs/4
+  fetch_structs/4,
+  result_to_lists/2,
+  result_to_tuples/2,
+  result_to_proplists/2,
+  result_to_records/3,
+  result_to_structs/3
 ]).
 %%--------------------------------------------------------------------------------------------------
 %% API
@@ -210,6 +215,30 @@ fetch_structs(C, SQL, Args, StructName) when
 ->
   Driver = get_driver_module(C),
   Driver:fetch_structs(C, SQL, Args, StructName).
+
+%%--------------------------------------------------------------------------------------------------
+%% Convert result to standard structures
+%%--------------------------------------------------------------------------------------------------
+
+result_to_lists(C, R) ->
+  Driver = get_driver_module(C),
+  Driver:result_to_lists(R).
+
+result_to_tuples(C, R) ->
+  Driver = get_driver_module(C),
+  Driver:result_to_tuples(R).
+
+result_to_proplists(C, R) ->
+  Driver = get_driver_module(C),
+  Driver:result_to_proplists(R).
+
+result_to_records(C, R, RecordName) ->
+  Driver = get_driver_module(C),
+  Driver:result_to_records(R, RecordName).
+
+result_to_structs(C, R, StructName) ->
+  Driver = get_driver_module(C),
+  Driver:result_to_structs(R, StructName).
 
 %%--------------------------------------------------------------------------------------------------
 %% Internal
