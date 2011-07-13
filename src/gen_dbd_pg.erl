@@ -94,7 +94,8 @@ fetch_structs(C, SQL, Params, StructName) ->
 
 %%--------------------------------------------------------------------------------------------------
 
-result_to_proplists({ok, Columns, Rows}) ->
+result_to_proplists(Result) ->
+  {Columns, Rows} = get_cols_and_rows(Result),
   ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
   loop_result_to_proplists(ColNames, Rows, []).
       
@@ -107,19 +108,22 @@ loop_result_to_proplists(Columns, [Row|Rows], Acc) ->
 
 %%--------------------------------------------------------------------------------------------------
 
-result_to_lists({ok, Columns, Rows}) ->
-    ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
-    {list_to_tuple(ColNames), [tuple_to_list(R) || R <- Rows]}.
+result_to_lists(Result) ->
+  {Columns, Rows} = get_cols_and_rows(Result),
+  ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
+  {list_to_tuple(ColNames), [tuple_to_list(R) || R <- Rows]}.
 
 %%--------------------------------------------------------------------------------------------------
 
-result_to_tuples({ok, Columns, Rows}) ->
+result_to_tuples(Result) ->
+  {Columns, Rows} = get_cols_and_rows(Result),
   ColNames = [list_to_atom(binary_to_list(element(2, Col))) || Col <- Columns],
   {list_to_tuple(ColNames), Rows}.
 
 %%--------------------------------------------------------------------------------------------------
 
-result_to_records({ok, _Columns, Rows}, RecordName) ->
+result_to_records(Result, RecordName) ->
+  {_Columns, Rows} = get_cols_and_rows(Result),
   loop_result_to_records(Rows, RecordName, []).
 
 loop_result_to_records([], _RecordName, Acc) ->
@@ -130,7 +134,8 @@ loop_result_to_records([Row|Rows], RecordName, Acc) ->
 
 %%--------------------------------------------------------------------------------------------------
 
-result_to_structs({ok, _Columns, Rows}, StructName) ->
+result_to_structs(Result, StructName) ->
+  {_Columns, Rows} = get_cols_and_rows(Result),
   loop_result_to_structs(Rows, [], StructName).
 
 loop_result_to_structs([], Acc, _StructName) ->
@@ -267,3 +272,12 @@ handle_exception(C, E) ->
   {error, system_malfunction}.
 
 %%--------------------------------------------------------------------------------------------------  
+
+get_cols_and_rows({ok, _Count, Cols, Rows}) ->
+  {Cols, Rows};
+get_cols_and_rows({ok, Cols, Rows}) ->
+  {Cols, Rows};
+get_cols_and_rows(R) ->
+  throw({invalid_result,[{result, R}]}).
+
+%%--------------------------------------------------------------------------------------------------
