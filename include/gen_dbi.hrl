@@ -1,12 +1,14 @@
 %%--------------------------------------------------------------------------------------------------
 -record(gen_dbi_dbh,{
-  driver = gen_dbd_pg,
-  handle = undefined
+  driver        = gen_dbd_pg,
+  driver_config = undefined,
+  handle        = undefined
 }).
 %%--------------------------------------------------------------------------------------------------
 -record(gen_dbi_sth, {
-  driver    = gen_dbd_pg,
-  handle    = undefined,
-  statement = undefined
+  driver        = gen_dbd_pg,
+  driver_config = undefined,  
+  handle        = undefined,
+  statement     = undefined
 }).
 %%--------------------------------------------------------------------------------------------------

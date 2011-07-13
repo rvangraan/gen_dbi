@@ -36,6 +36,10 @@
 %% API
 %%--------------------------------------------------------------------------------------------------
 
+%% TODO: make errors tuple/3 or record?
+
+%%--------------------------------------------------------------------------------------------------
+
 %% TODO: test if driver app is loaded and if driver can work?
 drivers() -> [pg].
 
@@ -57,14 +61,17 @@ connect() ->
 %%--------------------------------------------------------------------------------------------------
 
 connect(Driver, Host, Database, Username, Password, DriverOpts) ->
-  %% TODO common errors/exceptions?
   case is_driver_supported(Driver) of
     true  ->
       Module = get_driver_module(Driver),
-      io:format("** Module: ~p\n",[Module]),
+      DriverConfig = Module:config(),
       case Module:connect(Host, Database, Username, Password, DriverOpts) of
-        {ok, C}        -> {ok, #gen_dbi_dbh{driver = Module, handle = C}};
-        {error, Error} -> {error, Error}
+        {ok, C}        -> 
+          DBH = #gen_dbi_dbh{driver = Module, driver_config = DriverConfig, handle = C},
+          {ok, DBH};
+
+        {error, Error} -> 
+          {error, Error}
       end;
 
     false -> {error, invalid_driver}
@@ -74,8 +81,6 @@ connect(Driver, Host, Database, Username, Password, DriverOpts) ->
 
 disconnect(C) when is_record(C, gen_dbi_dbh) ->
   Driver = get_driver_module(C),
-  
-  %% TODO common errors/exceptions?
   ok = Driver:disconnect(C),
   ok.
 
