@@ -2,6 +2,7 @@
 -module(gen_dbd_pg_tests).
 %%--------------------------------------------------------------------------------------------------
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("osw_common/include/testhelper.hrl").
 -include_lib("gen_dbi/include/gen_dbi.hrl").
 %%--------------------------------------------------------------------------------------------------
 
@@ -17,15 +18,6 @@
 
 %%--------------------------------------------------------------------------------------------------
 
-mock(M) -> 
-  ProcName = list_to_atom(atom_to_list(M) ++ "_meck"),
-  case whereis(ProcName) of
-    undefined -> meck:new(M);
-    _Pid -> meck:unload(M), meck:new(M)
-  end.
-
-%%--------------------------------------------------------------------------------------------------
-
 connect_ok_test() ->
   F1 = fun(Host, User, Passwd, Opts) ->
     ?assertEqual(Host, "host"),
@@ -35,7 +27,7 @@ connect_ok_test() ->
     {ok, pid}
   end,
 
-  meck:new(pgsql),
+  mock(pgsql),
   meck:expect(pgsql, connect, F1),
 
   {ok, C} = gen_dbi:connect(pg, "host", "db", "user", "passwd", []),
