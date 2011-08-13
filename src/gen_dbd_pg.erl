@@ -58,7 +58,7 @@ fetch_proplists(C, SQL, Params) ->
   case execute(C, SQL, Params) of
     {ok, _Columns, _Rows}=R -> {ok, result_to_proplists(R)};
     {error, Error}          -> handle_error(Error);
-    _                       -> throw(not_a_select)
+    Err                     -> Err
   end.
 
 %%--------------------------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ fetch_lists(C, SQL, Params) ->
   case execute(C, SQL, Params) of
     {ok, _Columns, _Rows}=R -> {ok, result_to_lists(R)};
     {error, Error}          -> handle_error(Error);
-    _                       -> throw(not_a_select)
+    Err                     -> Err
   end.
 
 %%--------------------------------------------------------------------------------------------------
@@ -76,7 +76,7 @@ fetch_tuples(C, SQL, Params) ->
   case execute(C, SQL, Params) of
     {ok, _Columns, _Rows}=R -> {ok, result_to_tuples(R)};
     {error, Error}          -> handle_error(Error);
-    _                       -> throw(not_a_select)
+    Err                     -> Err
   end.
 
 %%--------------------------------------------------------------------------------------------------
@@ -85,7 +85,7 @@ fetch_records(C, SQL, Params, RecordName) ->
   case execute(C, SQL, Params) of
     {ok, _Columns, _Rows}=R -> {ok, result_to_records(R, RecordName)};
     {error, Error}        -> handle_error(Error);
-    _                     -> throw(not_a_select)
+    Err                     -> Err
   end.
 
 %%--------------------------------------------------------------------------------------------------  
@@ -95,7 +95,7 @@ fetch_structs(C, SQL, Params, StructName) ->
   case execute(C, SQL, Params) of
     {ok, _Columns, _Rows}=R -> {ok, result_to_structs(R, StructName)};
     {error, Error}        -> handle_error(Error);
-    _                     -> throw(not_a_select)
+    Err                     -> Err
   end.
 
 %%--------------------------------------------------------------------------------------------------
@@ -262,6 +262,11 @@ handle_error(Error) ->
 
     {error, error, <<"22001">>, Message, Params} ->
       {error, invalid_value, [{message, Message}] ++ Params};
+
+    {error, error, <<"42P01">>, Message, Params} ->
+      {error, table_does_not_exist, [message, Message] ++ Params};
+
+    {error, _, _}=Err -> Err;
 
     _ ->
       error_logger:error_msg("unknown gen_dbd_pg error: ~p\n", [Error]),

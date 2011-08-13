@@ -8,7 +8,11 @@
   trx_begin/1,
   trx_commit/1,
   trx_rollback/1,
+  trans/1,
+  transaction/1,
   trx/1,
+  trans/2,
+  transaction/2,
   trx/2,
   connect/0,
   connect/6,
@@ -102,6 +106,12 @@ trx_rollback(C) ->
 
 %%--------------------------------------------------------------------------------------------------
 
+trans(C, Fun) when is_record(C, gen_dbi_dbh), is_function(Fun) ->
+  trx(C, Fun).
+
+transaction(C, Fun) when is_record(C, gen_dbi_dbh), is_function(Fun) ->
+  trx(C, Fun).
+
 trx(C, Fun) when is_record(C, gen_dbi_dbh), is_function(Fun) ->
   try
     ok = trx_begin(C),
@@ -120,6 +130,12 @@ trx(C, Fun) when is_record(C, gen_dbi_dbh), is_function(Fun) ->
   after
     ok = trx_rollback(C)
   end.
+
+trans(Fun) when is_function(Fun) ->
+  trx(Fun).
+
+transaction(Fun) when is_function(Fun) ->
+  trx(Fun).
 
 trx(Fun) when is_function(Fun) ->
   %% TODO: pools
