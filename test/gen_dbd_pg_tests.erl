@@ -468,14 +468,14 @@ fetch_structs_ok_test() ->
   mock(pgsql),
   meck:expect(pgsql, equery, F1),
 
-  {ok, Ret} = gen_dbi:fetch_structs(C, "SELECT * FROM CURRENCY", currency),
+  {ok, Ret} = gen_dbi:fetch_structs(C, "SELECT * FROM CURRENCY", db_currency),
   ?assertEqual(Ret,
     [
-      {currency,840,<<"USD">>,<<"US DOLLAR">>},
-      {currency,710,<<"ZAR">>,<<"SOUTH AFRICAN RAND">>},
-      {currency,826,<<"GBP">>,<<"POUND STERLING">>},
-      {currency,978,<<"EUR">>,<<"EURO">>},
-      {currency,392,<<"JPY">>,<<"JAPANESE YEN">>}
+      {db_currency,840,<<"USD">>,<<"US DOLLAR">>},
+      {db_currency,710,<<"ZAR">>,<<"SOUTH AFRICAN RAND">>},
+      {db_currency,826,<<"GBP">>,<<"POUND STERLING">>},
+      {db_currency,978,<<"EUR">>,<<"EURO">>},
+      {db_currency,392,<<"JPY">>,<<"JAPANESE YEN">>}
     ]).
 
 %%--------------------------------------------------------------------------------------------------
