@@ -257,14 +257,26 @@ handle_error(Error) ->
     {error, error, <<"42601">>, Message, Params} -> 
       {error, invalid_syntax, [{message, Message}] ++ Params };
 
-    {error, error, <<"23505">>, Message, Params} ->
-      {error, unique_constraint, [{message, Message}] ++ Params};
+    {error, error, <<"22021">>, Message, Params} ->
+      {error, invalid_utf8, [{message, Message}] ++ Params};
 
     {error, error, <<"22001">>, Message, Params} ->
       {error, invalid_value, [{message, Message}] ++ Params};
 
     {error, error, <<"42P01">>, Message, Params} ->
       {error, table_does_not_exist, [message, Message] ++ Params};
+
+    {error, error, <<"42703">>, Message, Params} ->
+      {error, column_does_not_exist, [{message, Message}] ++ Params};
+
+    {error, error, <<"23505">>, Message, Params} ->
+      {error, unique_constraint, [{message, Message}] ++ Params};
+
+    {error, error, <<"23502">>, Message, Params} ->
+      {error, not_null_constraint, [{message, Message}] ++ Params};
+
+    {error, error, <<"23503">>, Message, Params} ->
+      {error, fkey_constraint,  [{message, Message}] ++ Params};
 
     {error, _, _}=Err -> Err;
 
