@@ -40,3 +40,19 @@ simple_bind_test_() ->
    ?_assertMatch(<<"SELECT FROM WHERE a=?">>,           gen_dbi_bind:simple_bind(<<"SELECT FROM WHERE a=\\?">>,["123'4"])),
    ?_assertMatch(<<"SELECT FROM WHERE a=1,b=2,c='3'">>, gen_dbi_bind:simple_bind(<<"SELECT FROM WHERE a=?,b=?,c=?">>,[1,2,"3"]))
   ].
+%%==============================================================================================
+covert_codepoints_test_() ->
+  [
+   ?_assertMatch(<<"">>,                   gen_dbi_bind:convert_codepoints("")),
+   ?_assertMatch(<<"123">>,                gen_dbi_bind:convert_codepoints("123")),
+   ?_assertMatch(<<16#E2,16#A1,16#88>>,    gen_dbi_bind:convert_codepoints([10312]))
+  ].
+%%==============================================================================================
+is_codepoint_test_() ->
+  [
+   ?_assertMatch(false,         gen_dbi_bind:is_codepoint(0)),
+   ?_assertMatch(false,         gen_dbi_bind:is_codepoint(128)),
+   ?_assertMatch(false,         gen_dbi_bind:is_codepoint(255)),
+   ?_assertMatch(true,          gen_dbi_bind:is_codepoint(256)),
+   ?_assertMatch(true,          gen_dbi_bind:is_codepoint(10312))
+  ].
