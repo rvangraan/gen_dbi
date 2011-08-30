@@ -105,7 +105,6 @@ trx_rollback(C) ->
   Driver:trx_rollback(C).
 
 %%--------------------------------------------------------------------------------------------------
-
 trans(C, Fun) when is_record(C, gen_dbi_dbh), is_function(Fun) ->
   trx(C, Fun).
 
